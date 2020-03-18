@@ -19,11 +19,6 @@ groupadd docker
 usermod -aG docker $USER
 
 cd /tmp
-wget https://dl.google.com/go/go1.14.linux-amd64.tar.gz
-tar -C /usr/local -xzf go1.14.linux-amd64.tar.gz
-echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> /etc/profile
-
-cd /tmp
 wget https://releases.hashicorp.com/terraform/0.12.23/terraform_0.12.23_linux_amd64.zip
 unzip terraform_0.12.23_linux_amd64.zip
 mv terraform /usr/local/bin
