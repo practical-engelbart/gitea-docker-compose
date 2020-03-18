@@ -1,0 +1,178 @@
+global:
+  sendAnonymousUsage: false
+  checkNewVersion: true
+
+log:
+  format: "common"
+  level:  "INFO"
+ 
+accessLog:
+  filePath: /var/log/traefik/access.log
+  bufferingSize: 1000
+  
+api:
+  dashboard: true
+
+providers: 
+  file:
+    filename: /etc/traefik/traefik.yml
+    watch: true
+
+entryPoints:
+  web:
+    address: ":80"
+  web-secure:
+    address: ":443"
+  ssh:
+    address: ":2222"
+  ping:
+    address: ":8081"
+  metrics:
+    address: ":8082"
+    
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      email: [user@example.com]
+      keyType: "EC256"
+      storage: /etc/traefik/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: 15
+
+http:
+  routers:
+  
+    #DASHBOARD
+    api-redirect:
+      rule: Host(`dashboard.foo.net`)
+      entryPoints:
+        - web
+      middlewares:
+        - https-redirect
+      service: api@internal
+      
+    api-router:
+      rule: Host(`dashboard.foo.net`) 
+      entryPoints:
+        - web-secure
+      middlewares:
+        - security-headers
+        - api-auth
+      service: api@internal
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "*.foo.net"
+        options: default
+        
+    #DRAWIO
+    drawio-redirect:
+      rule: Host(`drawio.foo.net`)
+      entryPoints:
+        - web
+      middlewares:
+        - https-redirect
+      service: drawio
+
+    drawio-router:
+      rule: Host(`drawio.foo.net`)
+      entryPoints:
+        - web-secure
+      middlewares:
+        - security-headers
+      service: drawio
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "*.foo.net"
+        options: default
+   
+    middlewares:
+      https-redirect:
+        redirectScheme:
+          scheme: "https"
+          permanent: true
+                
+      www-redirect:
+        redirectRegex:
+          regex: "^https://(foo\\.net.*)"
+          replacement: "https://www.${1}"
+          permanent: true
+                
+      security-headers:
+        headers:
+          referrerPolicy: no-referrer
+          frameDeny: true
+          sslRedirect: true
+          contentTypeNosniff: true
+          browserXssFilter: true
+          forceSTSHeader: true
+          stsPreload: true
+          stsIncludeSubdomains: true
+          stsSeconds: 63072000
+          customFrameOptionsValue: "DENY"
+          contentSecurityPolicy: upgrade-insecure-requests
+                
+      api-auth:
+        basicAuth:
+          users:
+            - "[[REDACTED]]:[[REDACTED]]"
+                    
+      insecure-chain:
+        chain:
+          middlewares:
+            - "https-redirect"
+                    
+      secure-and-www-chain:
+        chain:
+          middlewares:
+            - "security-headers"
+            - "www-redirect"
+                    
+      secure-chain:
+        chain:
+          middlewares:
+            - "response-headers"
+      
+      default-whitelist:
+        ipWhiteList:
+          sourceRange:
+            - "[vpn-public-ipaddress]"
+            - "172.20.1.0/24"
+tls:
+  options:
+    default:
+      sniStrict:  true
+      minVersion: "VersionTLS12"
+      mintls13:
+        minVersion: "VersionTLS13"
+      cipherSuites:
+        - "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+       
+services:
+  gitea:
+    loadBalancer:
+      servers:
+      - url: http://gitea:3000
+        
+  drawio:
+    loadBalancer:
+      servers:   
+      - url: http://drawio:8080
+      
+  drone:
+    loadBalancer:
+      servers:
+      - url: http://drone:80
+      
+  drone-runner:
+    loadBalancer:
+      servers:
+      - url: http://runner:9000
