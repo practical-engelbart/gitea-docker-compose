@@ -33,11 +33,26 @@ services:
       - traefik_assets:/output:rw
     labels:
       - "traefik.enable=false"
-
+      
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+    ports:
+      - '127.0.0.1:2375:2375'
+    networks:
+      - traefik-network
+    
   drone:
     container_name: drone
     image: drone/drone:latest
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       - DRONE_GITEA_SERVER=https://gitea.example.com
       - DRONE_GIT_ALWAYS_AUTH=false
@@ -69,6 +84,8 @@ services:
     image: drone/drone-runner-digitalocean:latest
     container_name: runner
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     networks:
       - drone-network
     volumes:
@@ -84,9 +101,11 @@ services:
      - "traefik.enable=true"
      
   gitea:
-    image: gitea/gitea:latest
+    image: gitea/gitea:1
     container_name: gitea
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - traefik
     networks:
@@ -116,6 +135,8 @@ services:
     image: plantuml/plantuml-server:latest
     container_name: drawio-plantuml
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     networks:
       - gitea-network
     volumes:
@@ -132,6 +153,8 @@ services:
     image: jgraph/export-server:latest
     container_name: drawio-image-export
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     networks:
       - gitea-network
     volumes:
@@ -148,6 +171,8 @@ services:
     image: jgraph/drawio:latest
     container_name: drawio
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - traefik
       - drawio-plantuml
