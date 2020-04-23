@@ -178,6 +178,8 @@ services:
     labels:
       - "traefik.enable=true"
       
+    
+      
 volumes:
   traefik_data:
     external: true
