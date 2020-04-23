@@ -1,178 +1,240 @@
+### GLOBAL CONFIGURATION ###
 global:
-  sendAnonymousUsage: false
   checkNewVersion: true
+  sendAnonymousUsage: false
 
-log:
-  format: "common"
-  level:  "INFO"
- 
-accessLog:
-  filePath: /var/log/traefik/access.log
-  bufferingSize: 1000
-  
 api:
   dashboard: true
 
-providers: 
+log:
+  level: INFO
+  filePath: /var/log/traefik/traefik.log
+  format: json
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  format: json
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        Authorization: drop
+        Content-Type: keep
+ 
+### PROVIDERS CONFIGURATION ###
+providers:
   file:
-    filename: /etc/traefik/traefik.yml
+    directory: /etc/traefik/
     watch: true
 
-entryPoints:
-  web:
-    address: ":80"
-  web-secure:
-    address: ":443"
-  ssh:
-    address: ":2222"
-  ping:
-    address: ":8081"
-  metrics:
-    address: ":8082"
-    
+tls:   
+  options:
+    default:
+      minVersion: VersionTLS12
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384  
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+      curvePreferences:
+        - CurveP521
+        - CurveP384
+      sniStrict: true      
+    mintls13:
+      minVersion: VersionTLS13
+      curvePreferences:
+        - CurveP521
+      sniStrict: true
+  
 certificatesResolvers:
   letsencrypt:
     acme:
       caServer: https://acme-v02.api.letsencrypt.org/directory
-      email: [user@example.com]
-      keyType: "EC256"
-      storage: /etc/traefik/acme.json
+      email: info@thelyoncompany.com
+      storage: /etc/ssl/traefik/acme.json
+      keyType: EC384
       dnsChallenge:
         provider: cloudflare
         delayBeforeCheck: 15
+        
+### STATIC CONFIGURATION ###
+entryPoints:
+  web:
+    address: :80
+    http:
+      redirections:
+        entrypoint:
+          to: web-secure
+          scheme: https
+          permanent: true
+    
+  web-secure:
+    address: :443
 
+  ping:
+    address: :8081
+
+  metrics:
+    address: :8082
+
+ping:
+  entryPoint: ping
+  
+metrics:
+  prometheus:
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    manualRouting: false
+    entryPoint: metrics
+
+### DYNAMIC CONFIGURATION ###
 http:
+
+  #ROUTERS
   routers:
   
     #DASHBOARD
     api-redirect:
-      rule: Host(`dashboard.foo.net`)
+      rule: "Host(`technerdonline.com`,`www.technerdonline.com`) && PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
       entryPoints:
         - web
       middlewares:
         - https-redirect
       service: api@internal
-      
+
+    #DASHBOARD SECURE
     api-router:
-      rule: Host(`dashboard.foo.net`) 
+      rule: "Host(`technerdonline.com`,`www.technerdonline.com`) && PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
       entryPoints:
         - web-secure
       middlewares:
-        - security-headers
+        - secure-headers
         - api-auth
       service: api@internal
       tls:
         certResolver: letsencrypt
         domains:
-          - main: "*.foo.net"
+          - main: "technerdonline.com"
+            sans:
+              - "*.technerdonline.com"
         options: default
-        
-    #DRAWIO
-    drawio-redirect:
-      rule: Host(`drawio.foo.net`)
+    
+    #GITEA
+    gitea-redirect:
+      rule: "Host(`git.technerdonline.com`)"
       entryPoints:
         - web
       middlewares:
         - https-redirect
-      service: drawio
+      service: gitea
 
-    drawio-router:
-      rule: Host(`drawio.foo.net`)
+    #GITEA SECURE
+    gitea-router:
+      rule: "Host(`git.technerdonline.com`)"
       entryPoints:
         - web-secure
       middlewares:
-        - security-headers
-      service: drawio
+        - secure-headers
+      service: gitea
       tls:
         certResolver: letsencrypt
         domains:
-          - main: "*.foo.net"
+          - main: "*.technerdonline.com"
         options: default
-   
-    middlewares:
-      https-redirect:
-        redirectScheme:
-          scheme: "https"
-          permanent: true
-                
-      www-redirect:
-        redirectRegex:
-          regex: "^https://(foo\\.net.*)"
-          replacement: "https://www.${1}"
-          permanent: true
-                
-      security-headers:
-        headers:
-          referrerPolicy: no-referrer
-          frameDeny: true
-          sslRedirect: true
-          contentTypeNosniff: true
-          browserXssFilter: true
-          forceSTSHeader: true
-          stsPreload: true
-          stsIncludeSubdomains: true
-          stsSeconds: 63072000
-          customFrameOptionsValue: "DENY"
-          contentSecurityPolicy: upgrade-insecure-requests
-                
-      api-auth:
-        basicAuth:
-          users:
-            - "[[REDACTED]]:[[REDACTED]]"
-                    
-      insecure-chain:
-        chain:
-          middlewares:
-            - "https-redirect"
-                    
-      secure-and-www-chain:
-        chain:
-          middlewares:
-            - "security-headers"
-            - "www-redirect"
-                    
-      secure-chain:
-        chain:
-          middlewares:
-            - "response-headers"
-      
-      default-whitelist:
-        ipWhiteList:
-          sourceRange:
-            - "[vpn-public-ipaddress]"
-            - "172.20.1.0/24"
-tls:
-  options:
-    default:
-      sniStrict:  true
-      minVersion: "VersionTLS12"
-      mintls13:
-        minVersion: "VersionTLS13"
-      cipherSuites:
-        - "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
-        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-        - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
-        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-        - "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305"
-        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
-       
-services:
-  gitea:
-    loadBalancer:
-      servers:
-      - url: http://gitea:3000
+
+    #BITWARDEN
+    bitwarden-redirect:
+      rule: "Host(`vault.technerdonline.com`)"
+      entryPoints:
+        - web
+      middlewares:
+        - https-redirect
+      service: bitwarden
+
+    #BITWARDEN SECURE
+    bitwarden-router:
+      rule: "Host(`vault.technerdonline.com`)"
+      entryPoints:
+        - web-secure
+      middlewares:
+        - secure-headers
+      service: bitwarden
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "vault.technerdonline.com"
+        options: default
         
-  drawio:
-    loadBalancer:
-      servers:   
-      - url: http://drawio:8080
-      
-  drone:
-    loadBalancer:
-      servers:
-      - url: http://drone:80
-      
-  drone-runner:
-    loadBalancer:
-      servers:
-      - url: http://runner:9000
+  #MIDDLEWARES
+  middlewares:
+  
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    api-auth:
+      basicAuth:
+        users:
+          - "username:password"
+
+    trusted-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - fd42:42:42::/64
+          - 10.128.1.0/24
+   
+    secure-headers:
+      headers:
+        sslRedirect: true 
+        sslForceHost: true  
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true    
+        forceSTSHeader: true
+        frameDeny: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "no-referrer"
+        contentSecurityPolicy: "upgrade-insecure-requests"
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"
+        
+    gitea-headers:
+      headers:
+        sslRedirect: true 
+        sslForceHost: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "no-referrer"
+        contentSecurityPolicy: "upgrade-insecure-requests"  
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"    
+
+
+  #SERVICES
+  services:
+  
+    gitea:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:3000
+
+    bitwarden:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:80
