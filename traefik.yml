@@ -1,245 +1,186 @@
-### GLOBAL CONFIGURATION ###
+##### STATIC CONFIG #####
 global:
   checkNewVersion: true
-  sendAnonymousUsage: false
-
-api:
-  dashboard: true
-
+  sendAnonymousUsage: false  
+    
 log:
   level: INFO
   filePath: /var/log/traefik/traefik.log
   format: json
-
 accessLog:
-  filePath: "/var/log/traefik/access.log"
+  filePath: /var/log/traefik/access.log
   format: json
   fields:
     defaultMode: keep
     names:
-      ClientUsername: drop
+      clientUsername: drop
     headers:
       defaultMode: keep
       names:
         User-Agent: keep
         Authorization: drop
         Content-Type: keep
- 
-### PROVIDERS CONFIGURATION ###
-providers:
-  file:
-    directory: /etc/traefik/
-    watch: true
+api:
+  dashboard: true
+  
+serversTransport:
+  rootCAs:
+    - /etc/traefik/cloudflare.crt
+    - /etc/traefik/ca.crt
 
-tls:   
+tls:
+  certificates:
+    - certFile: /etc/letsencrypt/cf-origin-cert.pem
+      keyFile: /etc/letsencrypt/cf-origin-key.pem 
   options:
     default:
-      minVersion: VersionTLS12
-      cipherSuites:
-        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384  
-        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-      curvePreferences:
-        - CurveP521
-        - CurveP384
-      sniStrict: true      
-    mintls13:
+      clientAuth:
+        caFiles:
+          - /etc/traefik/cloudflare.pem
+        clientAuthType: RequireAndVerifyClientCert
       minVersion: VersionTLS13
-      curvePreferences:
-        - CurveP521
       sniStrict: true
-  
+    mintls13:
+      clientAuth:
+        caFiles:
+          - /etc/traefik/cloudflare.pem
+        clientAuthType: RequireAndVerifyClientCert
+      minVersion: VersionTLS13
+      
 certificatesResolvers:
   letsencrypt:
     acme:
       caServer: https://acme-v02.api.letsencrypt.org/directory
       email: info@thelyoncompany.com
-      storage: /etc/ssl/traefik/acme.json
-      keyType: EC384
+      storage: /etc/letsencrypt/acme.json
+      keyType: EC256
       dnsChallenge:
         provider: cloudflare
-        delayBeforeCheck: 15
-        
-### STATIC CONFIGURATION ###
-entryPoints:
-  web:
-    address: :80
-    http:
-      redirections:
-        entrypoint:
-          to: web-secure
-          scheme: https
-          permanent: true
-    
-  web-secure:
-    address: :443
-
-  ping:
-    address: :8081
-
-  metrics:
-    address: :8082
-
+        delayBeforeCheck: 10
+        resolvers:
+          - '1.1.1.1:53'
+          - '1.0.0.1:53'
+#Health   
 ping:
-  entryPoint: ping
-  
+  entryPoint: "ping"
+  manualRouting: false
+#Metrics
 metrics:
   prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    manualRouting: false
     buckets:
       - 0.1
       - 0.3
       - 1.2
       - 5.0
-    addEntryPointsLabels: true
-    addServicesLabels: true
-    manualRouting: false
-    entryPoint: metrics
 
-### DYNAMIC CONFIGURATION ###
-http:
+providers:
+  docker:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+    tls:
+      ca: /etc/traefik/ca.crt
+      caOptional: true
+      cert: /etc/traefik/server.pem
+      key:  /etc/traefik/server-key.pem
+  file:
+    directory: /etc/traefik/
+    watch: true
+    
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: web-secure
+          scheme: https
+          permanent: true
 
-  #ROUTERS
-  routers:
-  
-    #DASHBOARD
-    api-redirect:
-      rule: "Host(`technerdonline.com`,`www.technerdonline.com`) && PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
-      entryPoints:
-        - web
-      middlewares:
-        - https-redirect
-      service: api@internal
-
-    #DASHBOARD SECURE
-    api-router:
-      rule: "Host(`technerdonline.com`,`www.technerdonline.com`) && PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
-      entryPoints:
-        - web-secure
+  web-secure:
+    address: ":443"
+    http:
       middlewares:
         - secure-headers
-        - api-auth
-      service: api@internal
+        - cf-passtlsclientcert
       tls:
+        options: default
         certResolver: letsencrypt
         domains:
           - main: "technerdonline.com"
             sans:
-              - "*.technerdonline.com"
-        options: default
+              - "*.technerdonline.com"              
+  ssh:
+    address: ":2222"
     
-    #GITEA
-    gitea-redirect:
-      rule: "Host(`git.technerdonline.com`)"
-      entryPoints:
-        - web
-      middlewares:
-        - https-redirect
-      service: gitea
+  ping:
+    address: ":8081"
 
-    #GITEA SECURE
-    gitea-router:
-      rule: "Host(`git.technerdonline.com`)"
-      entryPoints:
-        - web-secure
-      middlewares:
-        - secure-headers
-      service: gitea
-      tls:
-        certResolver: letsencrypt
-        domains:
-          - main: "*.technerdonline.com"
-        options: default
-
-    #DRAWIO
-    drawio-redirect:
-      rule: Host(`drawio.technerdonline.com`)
-      entryPoints:
-        - web
-      middlewares:
-        - https-redirect
-      service: drawio
-
-    #DRAWIO SECURE
-    drawio-router:
-      rule: Host(`drawio.technerdonline.com`)
-      entryPoints:
-        - web-secure
-      middlewares:
-        - security-headers
-        - api-auth
-      service: drawio
-      tls:
-        certResolver: letsencrypt
-        domains:
-          - main: "*.technerdonline.com"
-        options: default
-
-    #BITWARDEN
-    bitwarden-redirect:
-      rule: "Host(`vault.technerdonline.com`)"
-      entryPoints:
-        - web
-      middlewares:
-        - https-redirect
-      service: bitwarden
-
-    #BITWARDEN SECURE
-    bitwarden-router:
-      rule: "Host(`vault.technerdonline.com`)"
-      entryPoints:
-        - web-secure
-      middlewares:
-        - secure-headers
-      service: bitwarden
-      tls:
-        certResolver: letsencrypt
-        domains:
-          - main: "vault.technerdonline.com"
-        options: default
+  metrics:
+    address: ":8082"
     
-    #BITWARDEN WEBSOCKET
-    bitwarden-websocket-router:
-      rule: "Host(`vault.technerdonline.com`) && Path(`/notifications/hub`)"
-      entryPoints:
-        - web-secure
-      middlewares:
-        - secure-headers
-      service: bitwarden-websocket
-      tls:
-        certResolver: letsencrypt
-        domains:
-          - main: "*.technerdonline.com"
-        options: default
-        
-  #MIDDLEWARES
+http:
+  #MIDDLEWARES#
   middlewares:
   
-    https-redirect:
-      redirectScheme:
-        scheme: https
-        permanent: true
-        
-    www-redirect:
-      redirectRegex:
-        regex: "^https://(technerdonline\\.com.*)"
-        replacement: "https://www.${1}"
-        permanent: true
-
     api-auth:
       basicAuth:
         users:
-          - "username:password"
+          - admin:password
 
-    trusted-whitelist:
+    gitea-auth:
+      basicAuth:
+        users:
+          - drawio:password
+    
+    docker-whitelist:
       ipWhiteList:
         sourceRange:
-          - fd42:42:42::/64
-          - 10.128.1.0/24
-   
+          - 127.0.0.1/32
+          - 172.20.20.0/24
+          - 172.20.21.0/24
+          
+    cloudflare-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - 173.245.48.0/20
+          - 103.21.244.0/22
+          - 103.22.200.0/22
+          - 103.31.4.0/22
+          - 141.101.64.0/18
+          - 108.162.192.0/18
+          - 190.93.240.0/20
+          - 188.114.96.0/20
+          - 197.234.240.0/22
+          - 198.41.128.0/17
+          - 162.158.0.0/15
+          - 104.16.0.0/12
+          - 172.64.0.0/13
+          - 131.0.72.0/22
+        ipStrategy:
+          depth: 2
+          
+    cf-passtlsclientcert:
+      passTLSClientCert:
+        pem: true
+        
+    cors-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - HEAD
+          - POST
+        accessControlAllowOriginList:
+          - http://*.technerdonline.com
+        accessControlMaxAge: 100
+        addVaryHeader: true
+    
     secure-headers:
       headers:
-        sslRedirect: true 
+        sslRedirect: true
         sslForceHost: true  
         stsSeconds: 63072000
         stsIncludeSubdomains: true
@@ -251,25 +192,54 @@ http:
         browserXssFilter: true
         referrerPolicy: "no-referrer"
         contentSecurityPolicy: "upgrade-insecure-requests"
-        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"
-        
-    gitea-headers:
-      headers:
-        sslRedirect: true 
-        sslForceHost: true
-        stsSeconds: 63072000
-        stsIncludeSubdomains: true
-        stsPreload: true
-        forceSTSHeader: true
-        frameDeny: true
-        customFrameOptionsValue: "SAMEORIGIN"
-        contentTypeNosniff: true
-        browserXssFilter: true
-        referrerPolicy: "no-referrer"
-        contentSecurityPolicy: "upgrade-insecure-requests"  
-        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"    
-
-
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"             
+    
+  #ROUTERS
+  routers:
+  
+    #TRAEFIK
+    api-redirect:
+      entryPoints:
+        - web
+      rule: "Host(`dashboard.technerdonline.com`)"
+      service: api@internal
+    #TRAEFIK-SECURE
+    api-router:
+      rule: "Host(`dashboard.technerdonline.com`)"
+      entryPoints:
+        - web-secure
+      middlewares:
+        - api-auth
+      service: api@internal
+    #GITEA
+    gitea-redirect:
+      rule: "Host(`git.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: gitea
+    #GITEA-SECURE  
+    gitea-router:
+      rule: "Host(`git.technerdonline.com`)"
+      entryPoints:
+        - web-secure
+      middlewares:
+        - cors-headers
+      service: gitea
+    #DRAWIO  
+    drawio-redirect:
+      rule: "Host(`drawio.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: drawio
+    #DRAWIO-SECURE
+    drawio-router:
+      rule: "Host(`drawio.technerdonline.com`)"
+      entryPoints:
+        - web-secure
+      middlewares:
+        - gitea-auth
+      service: drawio
+      
   #SERVICES
   services:
   
@@ -278,22 +248,9 @@ http:
         servers:
           - url: http://gitea:3000
     
-    code-server:
-      loadBalancer:
-        servers:
-          - url: http://code-serer:9000
-    
     drawio:
       loadBalancer:
         servers:
           - url: http://drawio:8080
 
-    bitwarden:
-      loadBalancer:
-        servers:
-          - url: http://bitwarden:80
-          
-    bitwarden-websocket:
-      loadBalancer:
-        servers:
-          - url: ws://bitwarden:3012
+  
