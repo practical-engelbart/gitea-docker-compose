@@ -1,223 +1,131 @@
 version: '3'
-services:
-  traefik:
-    image: traefik:latest
-    container_name: traefik
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    ports:   
-      - 80:80  
-      - 443:443
-      - 2222:2222
-    networks:
-      - traefik-network
-    volumes:
-      - traefik_data:/etc/traefik/
-      - traefik_logs:/var/log/traefik/
-      - /etc/localtime:/etc/localtime:ro
-    env_file: .env
-    environment:
-      - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}                          
-      - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
-      - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
-      - CLOUDFLARE_ZONE_API_TOKEN=${CLOUDFLARE_ZONE_API_TOKEN}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-network"
+  services:
+    traefik:
+      image: traefik:latest
+      container_name: traefik
+      hostname: traefik
+      restart: unless-stopped
+      security_opt:
+        - no-new-privileges:true
+      ports:   
+        - 80:80  
+        - 443:443
+        - 2222:2222    
+      networks:
+        - traefik-network
+        - gitea-network
+      volumes:
+        - /certs:/certs:ro
+        - traefik_app:/etc/traefik/
+        - traefik_data:/etc/letsencrypt/
+        - traefik_log:/var/log/traefik/
+        - /etc/localtime:/etc/localtime:ro
+      env_file: .env
+      environment:
+        - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}                          
+        - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
+        - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
+        - CLOUDFLARE_ZONE_API_TOKEN=${CLOUDFLARE_ZONE_API_TOKEN}
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=gitea-network"
 
-  traefik-certdumper:
-    image: humenius/traefik-certs-dumper
-    container_name: traefik-certdumper
-    volumes:
-      - traefik_data:/etc/traefik:ro
-      - traefik_assets:/output:rw
-    labels:
-      - "traefik.enable=false"
-      
-  drone:
-    container_name: drone
-    image: drone/drone:latest
-    restart: always
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      - DRONE_GITEA_SERVER=https://gitea.example.com
-      - DRONE_GIT_ALWAYS_AUTH=false
-      - DRONE_RUNNER_CAPACITY=2
-      - DRONE_TLS_AUTOCERT=false
-      - DRONE_GITEA_CLIENT_ID=client-id
-      - DRONE_GITEA_CLIENT_SECRET=client-secret
-      - DRONE_USER_CREATE=username:user,admin:true
-      - DRONE_SERVER_PORT=3000
-      - DRONE_SERVER_HOST=drone.example.com
-      - DRONE_SERVER_PROTO=http
-      - DRONE_SECRET=${DRONE_SECRET}
-      - DRONE_DATABASE_DRIVER=sqlite3
-      - DRONE_DATABASE_DATASOURCE=/var/lib/drone/drone.sqlite
-      - DRONE_RUNNER_CAPACITY=2
-      - DRONE_TLS_AUTOCERT=false
-      - DRONE_ADMIN=${DRONE_ADMIN}
-      - DRONE_ADMIN_ALL=false
-    networks:
-      - drone-network
-      - traefik-network
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - drone_data:/data
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-network"
-  
-  runner:
-    image: drone/drone-runner-digitalocean:latest
-    container_name: runner
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - drone-network
-    volumes:
-      - runner_data:/data
-    env_file: .env
-    environment:
-      - DRONE_RPC_PROTO=https
-      - DRONE_RPC_HOST=drone.company.com
-      - DRONE_RPC_SECRET=super-duper-secret
-      - DRONE_PUBLIC_KEY_FILE=/path/in/container/id_rsa.pub
-      - DRONE_PRIVATE_KEY_FILE=/path/in/container/id_rsa
-   labels:
-     - "traefik.enable=true"
-     - "traefik.docker.network=traefik-network"
-     
-  gitea:
-    image: gitea/gitea:1
-    container_name: gitea
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      - traefik
-    networks:
-      - traefik-network
-      - gitea-network
-    volumes: 
-      - gitea_data:/data
-      - gitea_home:/home/git
-    env_files: .env
-    environment:
-      - USER_UID=109
-      - USER_GID=109
-      - DB_TYPE=${DB_TYPE}
-      - DB_HOST=${DB_HOST}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWD=${DB_PASSWD}
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://gitea:3000 || exit 1"]
-      interval: 1m30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-network"
-    
-  drawio-plantuml:
-    image: plantuml/plantuml-server:latest
-    container_name: drawio-plantuml
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - gitea-network
-    volumes:
-      - drawio_fonts:/usr/share/fonts/drawio
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://drawio-plantuml:8080 || exit 1"]
-      interval: 1m30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "traefik.enable=false"
+    gitea:
+      image: gitea/gitea:1
+      container_name: gitea
+      hostname: gitea
+      restart: unless-stopped
+      security_opt:
+        - no-new-privileges:true
+      depends_on:
+        - traefik
+      networks:
+        - gitea-network
+      volumes:
+        - gitea_data:/data
+        - /etc/timezone:/etc/timezone:ro
+        - /etc/localtime:/etc/localtime:ro
+      environment:
+        - USER_UID=112
+        - USER_GID=119
+        - RUN_MODE=prod
+        - HTTP_PORT=3000
+        - SSH_LISTEN_PORT=4000
+        - ROOT_URL='https://git.technerdonline.com'
+      healthcheck:
+        test: ["CMD-SHELL", "curl -f http://gitea:3000 || exit 1"]
+        interval: 1m30s
+        timeout: 10s
+        retries: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=gitea-network"
+        
+    plantuml-server:
+      image: jgraph/plantuml-server:latest
+      container_name: plantuml-server
+      restart: unless-stopped
+      security_opt: 
+        - no-new-privileges:true
+      networks:
+        - gitea-network
+      volumes:
+        - /app/drawio/fonts:/usr/share/fonts/drawio
+      labels:
+        - "traefik.enable=false"
+        
+    image-export:
+      image: jgraph/export-server:latest
+      container_name: export-server
+      restart: unless-stopped
+      security_opt:
+        - no-new-privileges:true
+      networks:
+        - gitea-network
+      volumes:
+        - /app/drawio/fonts:/usr/share/fonts/drawio
+      labels:
+        - "traefik.enable=false"
 
-  drawio-image-export:
-    image: jgraph/export-server:latest
-    container_name: drawio-image-export
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - gitea-network
-    volumes:
-      - drawio_fonts:/usr/share/fonts/drawio
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://drawio-image-export:8000 || exit 1"]
-      interval: 1m30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "traefik.enable=false"
-
-  drawio:
-    image: jgraph/drawio:latest
-    container_name: drawio
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      - traefik
-      - drawio-plantuml
-      - drawio-image-export
-    networks:
-      - traefik-network
-      - gitea-network
-    volumes:
-      - ./PostConfig.js:/usr/local/tomcat/webapps/draw/js/PostConfig.js
-      - ./PreConfig.js:/usr/local/tomcat/webapps/draw/js/PreConfig.js
-    env_file: .env
-    environment:
-      - PUBLIC_DNS=drawio.technerdonline.com
-      - ORGANISATION_UNIT=Gitea
-      - ORGANISATION=technerdonline.com
-      - CITY='Long Beach'
-      - STATE=CA
-      - COUNTRY_CODE=USA
-      - DRAWIO_GITLAB_URL=http://git.thelyoncompany.com
-      - DRAWIO_GITLAB_ID=${DRAWIO_ID}
-      - PLANTUML_URL=http://drawio-plantuml:8080/
-      - EXPORT_URL=http://drawio-image-export:8000/
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://drawio:8080 || exit 1"]
-      interval: 1m30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-network"
-    
-      
+    drawio:
+      image: jgraph/drawio:latest
+      container_name: drawio
+      hostname: drawio
+      restart: unless-stopped
+      security_opt:
+        - no-new-privileges:true
+      depends_on:
+        - traefik
+        - plantuml-server
+        - image-export
+      networks:
+        - gitea-network
+      volumes:
+        - /app/drawio/PostConfig.js:/usr/local/tomcat/webapps/draw/js/PostConfig.js
+        - /app/drawio/PreConfig.js:/usr/local/tomcat/webapps/draw/js/PreConfig.js
+      environment:
+        - PLANTUML_URL=http://plantuml-server:8080/
+        - EXPORT_URL=http://image-export:8000/
+      healthcheck:
+        test: ["CMD-SHELL", "curl -f http://drawio:8080 || exit 1"]
+        interval: 1m30s
+        timeout: 10s
+        retries: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=gitea-network"         
 volumes:
-  traefik_data:
+  traefik_app:
     external: true
-  traefik_assets:
+  traefik_data: 
     external: true
-  traefik_logs:
+  traefik_log: 
     external: true
   gitea_data:
     external: true
-  gitea_home:
-    external: true
-  drawio_fonts:
-    external: true
-  drone_data: 
-    external: true
-  runner_data:
-    external: true  
- 
+    
 networks:
-  traefik-network:
-    external: true
-  gitea-network:
-    external: true
-  drone-network:
-    external: true
+   traefik-network:
+     external: true
+   gitea-network:
+     external: true
