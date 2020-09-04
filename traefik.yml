@@ -7,6 +7,7 @@ log:
   level: INFO
   filePath: /var/log/traefik/traefik.log
   format: json
+  
 accessLog:
   filePath: /var/log/traefik/access.log
   format: json
@@ -27,31 +28,12 @@ serversTransport:
   rootCAs:
     - /etc/traefik/cloudflare.crt
     - /etc/traefik/ca.crt
-
-tls:
-  certificates:
-    - certFile: /etc/letsencrypt/cf-origin-cert.pem
-      keyFile: /etc/letsencrypt/cf-origin-key.pem 
-  options:
-    default:
-      clientAuth:
-        caFiles:
-          - /etc/traefik/cloudflare.pem
-        clientAuthType: RequireAndVerifyClientCert
-      minVersion: VersionTLS13
-      sniStrict: true
-    mintls13:
-      clientAuth:
-        caFiles:
-          - /etc/traefik/cloudflare.pem
-        clientAuthType: RequireAndVerifyClientCert
-      minVersion: VersionTLS13
       
 certificatesResolvers:
   letsencrypt:
     acme:
       caServer: https://acme-v02.api.letsencrypt.org/directory
-      email: info@thelyoncompany.com
+      email: acme@technerdonline.com
       storage: /etc/letsencrypt/acme.json
       keyType: EC256
       dnsChallenge:
@@ -62,12 +44,12 @@ certificatesResolvers:
           - '1.0.0.1:53'
 #Health   
 ping:
-  entryPoint: "ping"
+  entryPoint: "traefik"
   manualRouting: false
 #Metrics
 metrics:
   prometheus:
-    entryPoint: metrics
+    entryPoint: "traefik"
     addEntryPointsLabels: true
     addServicesLabels: true
     manualRouting: false
@@ -79,7 +61,7 @@ metrics:
 
 providers:
   docker:
-    endpoint: unix:///var/run/docker.sock
+    endpoint: tcp://172.20.20.1:2376
     exposedByDefault: false
     tls:
       ca: /etc/traefik/ca.crt
@@ -96,11 +78,11 @@ entryPoints:
     http:
       redirections:
         entryPoint:
-          to: web-secure
+          to: websecure
           scheme: https
           permanent: true
 
-  web-secure:
+  websecure:
     address: ":443"
     http:
       middlewares:
@@ -112,20 +94,13 @@ entryPoints:
         domains:
           - main: "technerdonline.com"
             sans:
-              - "*.technerdonline.com"              
-  ssh:
+              - "*.technerdonline.com"
+  tcp:
     address: ":2222"
-    
-  ping:
-    address: ":8081"
-
-  metrics:
-    address: ":8082"
-    
+      
 http:
   #MIDDLEWARES#
   middlewares:
-  
     api-auth:
       basicAuth:
         users:
@@ -180,8 +155,7 @@ http:
     
     secure-headers:
       headers:
-        sslRedirect: true
-        sslForceHost: true  
+        sslRedirect: true  
         stsSeconds: 63072000
         stsIncludeSubdomains: true
         stsPreload: true    
@@ -196,18 +170,17 @@ http:
     
   #ROUTERS
   routers:
-  
     #TRAEFIK
     api-redirect:
-      entryPoints:
+      rule: "Host(`traefik.technerdonline.com`)"
+      entryPoint:
         - web
-      rule: "Host(`dashboard.technerdonline.com`)"
       service: api@internal
     #TRAEFIK-SECURE
     api-router:
-      rule: "Host(`dashboard.technerdonline.com`)"
+      rule: "Host(`traefik.technerdonline.com`)"
       entryPoints:
-        - web-secure
+        - websecure
       middlewares:
         - api-auth
       service: api@internal
@@ -221,7 +194,7 @@ http:
     gitea-router:
       rule: "Host(`git.technerdonline.com`)"
       entryPoints:
-        - web-secure
+        - websecure
       middlewares:
         - cors-headers
       service: gitea
@@ -235,7 +208,7 @@ http:
     drawio-router:
       rule: "Host(`drawio.technerdonline.com`)"
       entryPoints:
-        - web-secure
+        - websecure
       middlewares:
         - gitea-auth
       service: drawio
@@ -253,4 +226,51 @@ http:
         servers:
           - url: http://drawio:8080
 
-  
+tcp:
+  routers:
+    giteassh-router:
+      rule: "Host(`git.technerdonline.com`)"
+      entryPoints:
+        - tcp
+      service: gitea-ssh
+      
+  services:
+    gitea-ssh:
+      loadBalancer:
+        servers:
+          - url: tcp://gitea:4000
+    
+tls:
+  certificates:certificates:
+    - certFile: /etc/letsencrypt/domain.cert
+      keyFile: /etc/letsencrypt/domain.key
+      stores:
+        - default
+    - certFile: /etc/letsencrypt/cf-origin-cert.pem
+      keyFile: /etc/letsencrypt/cf-origin-key.pem
+      stores:
+        - cloudflare
+        
+ stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/letsencrypt/domain.cert
+        keyFile: /etc/letsencrypt/domain.key
+    cloudflare:
+      cloudflareCertificate:
+        certFile: /etc/letsencrypt/cf-origin-cert.pem
+        keyFile: /etc/letsencrypt/cf-origin-key.pem
+        
+  options:
+    default:
+      minVersion: VersionTLS13
+      sniStrict: true
+      curvePreferences: 
+        - CurveP521
+        - CurveP384
+      preferServerCipherSuites: true
+      clientAuth:
+        caFiles:
+          - /etc/traefik/cloudflare.pem
+        clientAuthType: RequireAndVerifyClientCert  
+       
