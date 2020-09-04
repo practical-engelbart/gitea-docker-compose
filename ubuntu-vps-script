@@ -430,7 +430,7 @@ cat << EOF > /etc/cfssl/docker-ca/ca-csr.json
   ]
 }
 EOF
-cat << EOF > /etc/cfssl/docker-ca/server.json
+cat << EOF > /etc/cfssl/docker-ca/peer.json
 {
   "CN": "localhost",
   "hosts": [
@@ -456,7 +456,7 @@ cat << EOF > /etc/cfssl/docker-ca/server.json
 }
 EOF
   
-cat <<EOF > /etc/cfssl/docker-ca/client.json
+cat <<EOF > /etc/cfssl/docker-ca/server.json
 {
   "CN": "traefik",
   "hosts": [
