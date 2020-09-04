@@ -215,7 +215,6 @@ http:
       
   #SERVICES
   services:
-  
     gitea:
       loadBalancer:
         servers:
@@ -238,24 +237,26 @@ tcp:
     gitea-ssh:
       loadBalancer:
         servers:
-          - url: tcp://gitea:4000
+          - address: tcp://gitea:4000
     
 tls:
-  certificates:certificates:
+  certificates:
     - certFile: /etc/letsencrypt/domain.cert
       keyFile: /etc/letsencrypt/domain.key
       stores:
         - default
+        
     - certFile: /etc/letsencrypt/cf-origin-cert.pem
       keyFile: /etc/letsencrypt/cf-origin-key.pem
       stores:
         - cloudflare
         
- stores:
+  stores:
     default:
       defaultCertificate:
         certFile: /etc/letsencrypt/domain.cert
         keyFile: /etc/letsencrypt/domain.key
+        
     cloudflare:
       cloudflareCertificate:
         certFile: /etc/letsencrypt/cf-origin-cert.pem
@@ -263,7 +264,7 @@ tls:
         
   options:
     default:
-      minVersion: VersionTLS13
+      minVersion: VersionTLS12
       sniStrict: true
       curvePreferences: 
         - CurveP521
@@ -272,5 +273,18 @@ tls:
       clientAuth:
         caFiles:
           - /etc/traefik/cloudflare.pem
-        clientAuthType: RequireAndVerifyClientCert  
+        clientAuthType: RequireAndVerifyClientCert
+        
+    cloudflare:
+      minVersion: VersionTLS12
+      sniStrict: true
+      curvePreferences: 
+        - CurveP521
+        - CurveP384
+      preferServerCipherSuites: true
+      clientAuth:
+        caFiles:
+          - /etc/traefik/cloudflare.pem
+        clientAuthType: RequireAndVerifyClientCert
+        
        
