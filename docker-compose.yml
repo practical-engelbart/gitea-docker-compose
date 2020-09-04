@@ -24,6 +24,7 @@ services:
       - CLOUDFLARE_ZONE_API_TOKEN=${CLOUDFLARE_ZONE_API_TOKEN}
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
 
   traefik-certdumper:
     image: humenius/traefik-certs-dumper
@@ -34,19 +35,6 @@ services:
     labels:
       - "traefik.enable=false"
       
-  socket-proxy:
-    image: tecnativa/docker-socket-proxy
-    container_name: socket-proxy
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      CONTAINERS: 1
-    ports:
-      - '127.0.0.1:2375:2375'
-    networks:
-      - traefik-network
-    
   drone:
     container_name: drone
     image: drone/drone:latest
@@ -79,6 +67,7 @@ services:
       - drone_data:/data
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
   
   runner:
     image: drone/drone-runner-digitalocean:latest
@@ -99,6 +88,7 @@ services:
       - DRONE_PRIVATE_KEY_FILE=/path/in/container/id_rsa
    labels:
      - "traefik.enable=true"
+     - "traefik.docker.network=traefik-network"
      
   gitea:
     image: gitea/gitea:1
@@ -130,6 +120,7 @@ services:
       retries: 3
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
     
   drawio-plantuml:
     image: plantuml/plantuml-server:latest
@@ -202,7 +193,7 @@ services:
       retries: 3
     labels:
       - "traefik.enable=true"
-      
+      - "traefik.docker.network=traefik-network"
     
       
 volumes:
