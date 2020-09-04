@@ -483,6 +483,7 @@ EOF
 mkdir -p /etc/docker/certs.d/
 mkdir -p /root/.docker
 mkdir -p /etc/docker/ssl
+mkdir -p /opt/docker/{traefik,gitea,drawio,drone}
 
 groupadd --system traefik
 useradd \
