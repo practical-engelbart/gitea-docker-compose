@@ -1,52 +1,20 @@
 ##### STATIC CONFIG #####
 global:
   checkNewVersion: true
-  sendAnonymousUsage: false  
-    
-log:
-  level: INFO
-  filePath: /var/log/traefik/traefik.log
-  format: json
-  
-accessLog:
-  filePath: /var/log/traefik/access.log
-  format: json
-  fields:
-    defaultMode: keep
-    names:
-      clientUsername: drop
-    headers:
-      defaultMode: keep
-      names:
-        User-Agent: keep
-        Authorization: drop
-        Content-Type: keep
-api:
-  dashboard: true
-  
+  sendAnonymousUsage: false
+
 serversTransport:
   rootCAs:
-    - /etc/traefik/cloudflare.crt
-    - /etc/traefik/ca.crt
-      
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      caServer: https://acme-v02.api.letsencrypt.org/directory
-      email: acme@technerdonline.com
-      storage: /etc/letsencrypt/acme.json
-      keyType: EC256
-      dnsChallenge:
-        provider: cloudflare
-        delayBeforeCheck: 10
-        resolvers:
-          - '1.1.1.1:53'
-          - '1.0.0.1:53'
-#Health   
+    - /etc/traefik/ssl/cloudflare.crt
+  
+api:
+  dashboard: true
+  insecure: false
+  
 ping:
   entryPoint: "traefik"
   manualRouting: false
-#Metrics
+
 metrics:
   prometheus:
     entryPoint: "traefik"
@@ -59,19 +27,44 @@ metrics:
       - 1.2
       - 5.0
 
+log:
+  level: INFO
+  filePath: /etc/traefik/log/traefik.log
+  format: json
+
+accessLog:
+  filePath: /etc/traefik/log/access.log
+  format: json
+  fields:
+    defaultMode: keep
+    names:
+      clientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        Authorization: drop
+        Content-Type: keep
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      email: edwin@thelyoncompany.com
+      storage: /etc/traefik/ssl/acme.json
+      keyType: EC256
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: 10
+        resolvers:
+          - '1.0.0.1:53'
+          - '1.0.0.1:53'
+
 providers:
-  docker:
-    endpoint: tcp://172.20.20.1:2376
-    exposedByDefault: false
-    tls:
-      ca: /etc/traefik/ca.crt
-      caOptional: true
-      cert: /etc/traefik/server.pem
-      key:  /etc/traefik/server-key.pem
   file:
-    directory: /etc/traefik/
+    filename: /etc/traefik/traefik.yml
     watch: true
-    
+
 entryPoints:
   web:
     address: ":80"
@@ -86,8 +79,8 @@ entryPoints:
     address: ":443"
     http:
       middlewares:
-        - secure-headers
-        - cf-passtlsclientcert
+        - cf-passtlsclientcert@file
+        - secure-header@file
       tls:
         options: default
         certResolver: letsencrypt
@@ -95,85 +88,39 @@ entryPoints:
           - main: "technerdonline.com"
             sans:
               - "*.technerdonline.com"
-  tcp:
-    address: ":2222"
-      
-http:
-  #MIDDLEWARES#
-  middlewares:
-    api-auth:
-      basicAuth:
-        users:
-          - admin:password
+          - main: "technerdonline.net"
+            sans:
+              - "*.technerdonline.net"
 
-    gitea-auth:
-      basicAuth:
-        users:
-          - drawio:password
+http:
+  #SERVICES
+  services:
+    gitea:
+      loadBalancer:
+        servers:
+          - url: http://gitea:3000
     
-    docker-whitelist:
-      ipWhiteList:
-        sourceRange:
-          - 127.0.0.1/32
-          - 172.20.20.0/24
-          - 172.20.21.0/24
-          
-    cloudflare-whitelist:
-      ipWhiteList:
-        sourceRange:
-          - 173.245.48.0/20
-          - 103.21.244.0/22
-          - 103.22.200.0/22
-          - 103.31.4.0/22
-          - 141.101.64.0/18
-          - 108.162.192.0/18
-          - 190.93.240.0/20
-          - 188.114.96.0/20
-          - 197.234.240.0/22
-          - 198.41.128.0/17
-          - 162.158.0.0/15
-          - 104.16.0.0/12
-          - 172.64.0.0/13
-          - 131.0.72.0/22
-        ipStrategy:
-          depth: 2
-          
-    cf-passtlsclientcert:
-      passTLSClientCert:
-        pem: true
-        
-    cors-headers:
-      headers:
-        accessControlAllowMethods:
-          - GET
-          - HEAD
-          - POST
-        accessControlAllowOriginList:
-          - http://*.technerdonline.com
-        accessControlMaxAge: 100
-        addVaryHeader: true
-    
-    secure-headers:
-      headers:
-        sslRedirect: true  
-        stsSeconds: 63072000
-        stsIncludeSubdomains: true
-        stsPreload: true    
-        forceSTSHeader: true
-        frameDeny: true
-        customFrameOptionsValue: "SAMEORIGIN"
-        contentTypeNosniff: true
-        browserXssFilter: true
-        referrerPolicy: "no-referrer"
-        contentSecurityPolicy: "upgrade-insecure-requests"
-        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"             
-    
+    drawio:
+      loadBalancer:
+        servers:
+          - url: http://drawio:8080
+
+    code-server:
+      loadBalancer:
+        servers:
+          - url: http://code-server:8443
+
+    nginx:
+      loadBalancer:
+        servers:
+          - url: http://nginx:80
+
   #ROUTERS
   routers:
     #TRAEFIK
     api-redirect:
       rule: "Host(`traefik.technerdonline.com`)"
-      entryPoint:
+      entryPoints:
         - web
       service: api@internal
     #TRAEFIK-SECURE
@@ -182,7 +129,8 @@ http:
       entryPoints:
         - websecure
       middlewares:
-        - api-auth
+        - basic-auth
+        - csp-header
       service: api@internal
     #GITEA
     gitea-redirect:
@@ -196,7 +144,7 @@ http:
       entryPoints:
         - websecure
       middlewares:
-        - cors-headers
+        - gitea-header
       service: gitea
     #DRAWIO  
     drawio-redirect:
@@ -210,81 +158,143 @@ http:
       entryPoints:
         - websecure
       middlewares:
-        - gitea-auth
+        - basic-auth
+        - gitea-header
       service: drawio
-      
-  #SERVICES
-  services:
-    gitea:
-      loadBalancer:
-        servers:
-          - url: http://gitea:3000
-    
-    drawio:
-      loadBalancer:
-        servers:
-          - url: http://drawio:8080
-
-tcp:
-  routers:
-    giteassh-router:
-      rule: "Host(`git.technerdonline.com`)"
+    #CODE-SERVER
+    code-server-redirect:
+      rule: "Host(`code-server.technerdonline.com`)"
       entryPoints:
-        - tcp
-      service: gitea-ssh
-      
-  services:
-    gitea-ssh:
-      loadBalancer:
-        servers:
-          - address: tcp://gitea:4000
+        - web
+      service: code-server
+    #CODE-SERVER-SECURE
+    code-server-router:
+      rule: "Host(`code-server.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - basic-auth
+        - gitea-header
+      service: code-server
+    #NGINX
+    nginx-redirect:
+      rule: "Host(`technerdonline.com`,`www.technerdonline.com`) || Host(`technerdonline.net`,`www.technerdonline.net`)"
+      entryPoints:
+        - web
+      middlewares:
+        - www-redirectregex
+        - net-redirectregex
+      service: nginx
+    #NGINX-SECURE
+    nginx-router:
+      rule: "Host(`technerdonline.com`, `www.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - csp-header
+      service: nginx
+  
+  #MIDDLEWARES
+  middlewares:
+    basic-auth:
+      basicAuth:
+        users:
+          - "$USER:$PASSWORD"
+        usersFile: "/etc/traefik/.htpasswd"
+        headerField: "X-WebAuth-User"
+        removeHeader: true
+
+    secure-header:
+      headers:
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        sslRedirect: true
+        forceSTSHeader: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        referrerPolicy: "no-referrer"
+
+    csp-header:
+      headers:
+        contentSecurityPolicy: "default-src 'self'; base-uri 'none'; object-src 'none'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self'; media-src 'self'; frame-ancestors 'self'; worker-src 'self' blob:" 
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'none'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"
+
+    gitea-header:
+      headers:
+        contentSecurityPolicy: "default-src 'self'; base-uri 'none'; object-src 'none'; manifest-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://*.technerdonline.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://*.technerdonline.com; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self'; media-src 'self'; frame-ancestors 'self'; worker-src 'self' blob:"
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'none'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'self' https://twofactorauth.org https://haveibeenpwned.org; usb *; vr 'none'"
+        
+    cf-passtlsclientcert:
+      passTLSClientCert:
+        pem: true
     
+    http-redirectscheme:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    www-redirectregex:
+      redirectRegex:
+        regex: "^www.technerdonline.net"
+        replacement: "www.technerdonline.com"
+        permanent: true
+
+    net-redirectregex:
+      redirectRegex:
+        regex: "^technerdonline.net"
+        replacement: "technerdonline.com"
+        permanent: true
+
 tls:
   certificates:
-    - certFile: /etc/letsencrypt/domain.cert
-      keyFile: /etc/letsencrypt/domain.key
-      stores:
-        - default
-        
-    - certFile: /etc/letsencrypt/cf-origin-cert.pem
-      keyFile: /etc/letsencrypt/cf-origin-key.pem
-      stores:
-        - cloudflare
-        
-  stores:
-    default:
-      defaultCertificate:
-        certFile: /etc/letsencrypt/domain.cert
-        keyFile: /etc/letsencrypt/domain.key
-        
-    cloudflare:
-      cloudflareCertificate:
-        certFile: /etc/letsencrypt/cf-origin-cert.pem
-        keyFile: /etc/letsencrypt/cf-origin-key.pem
-        
+  - certFile: /etc/traefik/ssl/cert.pem
+    keyFile: /etc/traefik/ssl/key.pem
+    stores: default
+ 
+  - certFile: /etc/traefik/ssl/technerdonline.net.pem
+    keyFile: /etc/traefik/ssl/technerdonline.net-key.pem
+    stores: technerdonline.net
+
   options:
     default:
       minVersion: VersionTLS12
-      sniStrict: true
-      curvePreferences: 
+      maxVersion: VersionTLS13
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      curvePreferences:
         - CurveP521
         - CurveP384
+      sniStrict: true
       preferServerCipherSuites: true
       clientAuth:
         caFiles:
-          - /etc/traefik/cloudflare.pem
+          - /etc/traefik/ssl/cloudflare.crt
         clientAuthType: RequireAndVerifyClientCert
-        
-    cloudflare:
-      minVersion: VersionTLS12
+
+    mintls13:
+      minVersion: VersionTLS13
+      maxVersion: VersionTLS13
       sniStrict: true
-      curvePreferences: 
-        - CurveP521
-        - CurveP384
-      preferServerCipherSuites: true
       clientAuth:
-        caFiles:
-          - /etc/traefik/cloudflare.pem
+        caFiles: 
+          - /etc/traefik/ssl/cloudflare.crt
         clientAuthType: RequireAndVerifyClientCert
-        
-       
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/ssl/cert.pem
+        keyFile: /etc/traefik/ssl/key.pem
+
+    technerdonline.net:
+      defaultCertificate:
+        certFile: /etc/traefik/ssl/technerdonline.net.pem
+        keyFile: /etc/traefik/ssl/technerdonline.net-key.pem 
