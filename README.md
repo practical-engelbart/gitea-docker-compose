@@ -24,6 +24,13 @@ mariadb
 docker volume create \
 --driver local \
 --opt type=none \
+--opt device=$HOME/project/appdata/nginx \
+--opt o=bind \
+nginx
+
+docker volume create \
+--driver local \
+--opt type=none \
 --opt device=$HOME/project/appdata/code-server \
 --opt o=bind \
 code-server
