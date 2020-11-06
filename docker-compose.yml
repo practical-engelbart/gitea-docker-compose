@@ -1,131 +1,198 @@
-version: '3'
-  services:
-    traefik:
-      image: traefik:latest
-      container_name: traefik
-      hostname: traefik
-      restart: unless-stopped
-      security_opt:
-        - no-new-privileges:true
-      ports:   
-        - 80:80  
-        - 443:443
-        - 2222:2222    
-      networks:
-        - traefik-network
-        - gitea-network
-      volumes:
-        - /certs:/certs:ro
-        - traefik_app:/etc/traefik/
-        - traefik_data:/etc/letsencrypt/
-        - traefik_log:/var/log/traefik/
-        - /etc/localtime:/etc/localtime:ro
-      env_file: .env
-      environment:
-        - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}                          
-        - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
-        - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN}
-        - CLOUDFLARE_ZONE_API_TOKEN=${CLOUDFLARE_ZONE_API_TOKEN}
-      labels:
-        - "traefik.enable=true"
-        - "traefik.docker.network=gitea-network"
+version: "2.1"
+services:
+  mariadb:
+    image: linuxserver/mariadb
+    container_name: mariadb
+    env_file:
+      - .env
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - mariadb:/config
+    networks:
+      - docker-network
+    restart: unless-stopped
+    labels:
+      - traefik.enable=false
 
-    gitea:
-      image: gitea/gitea:1
-      container_name: gitea
-      hostname: gitea
-      restart: unless-stopped
-      security_opt:
-        - no-new-privileges:true
-      depends_on:
-        - traefik
-      networks:
-        - gitea-network
-      volumes:
-        - gitea_data:/data
-        - /etc/timezone:/etc/timezone:ro
-        - /etc/localtime:/etc/localtime:ro
-      environment:
-        - USER_UID=112
-        - USER_GID=119
-        - RUN_MODE=prod
-        - HTTP_PORT=3000
-        - SSH_LISTEN_PORT=4000
-        - ROOT_URL='https://git.technerdonline.com'
-      healthcheck:
-        test: ["CMD-SHELL", "curl -f http://gitea:3000 || exit 1"]
-        interval: 1m30s
-        timeout: 10s
-        retries: 3
-      labels:
-        - "traefik.enable=true"
-        - "traefik.docker.network=gitea-network"
-        
-    plantuml-server:
-      image: jgraph/plantuml-server:latest
-      container_name: plantuml-server
-      restart: unless-stopped
-      security_opt: 
-        - no-new-privileges:true
-      networks:
-        - gitea-network
-      volumes:
-        - /app/drawio/fonts:/usr/share/fonts/drawio
-      labels:
-        - "traefik.enable=false"
-        
-    image-export:
-      image: jgraph/export-server:latest
-      container_name: export-server
-      restart: unless-stopped
-      security_opt:
-        - no-new-privileges:true
-      networks:
-        - gitea-network
-      volumes:
-        - /app/drawio/fonts:/usr/share/fonts/drawio
-      labels:
-        - "traefik.enable=false"
+  code-server:
+    image: linuxserver/code-server
+    container_name: code-server
+    env_file:
+      - .env
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+      - PASSWORD=${PASSWORD}
+      - SUDO_PASSWORD=${SUDO_PASSWORD}
+      - PROXY_DOMAIN="technerdonline.com"
+    volumes:
+      - code-server:/config
+    networks:
+      - docker-network
+    depends_on:
+      - mariadb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://code-server:8443 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
 
-    drawio:
-      image: jgraph/drawio:latest
-      container_name: drawio
-      hostname: drawio
-      restart: unless-stopped
-      security_opt:
-        - no-new-privileges:true
-      depends_on:
-        - traefik
-        - plantuml-server
-        - image-export
-      networks:
-        - gitea-network
-      volumes:
-        - /app/drawio/PostConfig.js:/usr/local/tomcat/webapps/draw/js/PostConfig.js
-        - /app/drawio/PreConfig.js:/usr/local/tomcat/webapps/draw/js/PreConfig.js
-      environment:
-        - PLANTUML_URL=http://plantuml-server:8080/
-        - EXPORT_URL=http://image-export:8000/
-      healthcheck:
-        test: ["CMD-SHELL", "curl -f http://drawio:8080 || exit 1"]
-        interval: 1m30s
-        timeout: 10s
-        retries: 3
-      labels:
-        - "traefik.enable=true"
-        - "traefik.docker.network=gitea-network"         
-volumes:
-  traefik_app:
-    external: true
-  traefik_data: 
-    external: true
-  traefik_log: 
-    external: true
-  gitea_data:
-    external: true
-    
+  gitea:
+    image: gitea/gitea:1
+    container_name: gitea
+    env_file:
+      - .env
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+      - APP_DATA_PATH=/data/gitea
+      - GITEA_WORK_DIR=/data/gitea/custom
+      - ROOT=/data/git/gitea-repositories
+      - RUN_MODE=prod
+      - HTTP_PORT=3000
+      - SSH_LISTEN_PORT=4000
+      - ROOT_URL='https://git.technerdonline.com
+      - CERT_FILE=https/cert.pem
+      - KEY_FILE=https/key.pem
+      - DB_TYPE=mysql
+      - DB_HOST=mariadb:3306
+      - DB_NAME=${MYSQL_DATABASE}
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWD=${MYSQL_PASSWORD}
+    volumes:
+      - gitea:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - docker-network
+    depends_on:
+      - mariadb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://gitea:3000 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+
+  plantuml-server:
+    image: jgraph/plantuml-server
+    container_name: plantuml-server
+    security_opt:
+      - no-new-privileges=true
+    environment: 
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - ./appdata/drawio/fonts/:/usr/share/fonts/drawio
+    networks:
+      - docker-network
+    depends_on:
+      - gitea
+    restart: unless-stopped
+    labels:
+      - traefik.enable=false
+
+  image-server:
+    image: jgraph/export-server
+    container_name: image-server
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - ./appdata/drawio/fonts/:/usr/share/fonts/drawio
+    networks:
+      - docker-network
+    depends_on:
+      - gitea
+    restart: unless-stopped
+    labels:
+      - traefik.enable=false
+
+  drawio:
+    image: jgraph/drawio
+    container_name: drawio
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+      - PUBLIC_DNS=drawio.technerdonline.com
+      - ORGANISATION_UNIT=Drawio
+      - ORGANISATION=Docker
+      - CITY="LA"
+      - STATE=California
+      - COUNTRY_CODE=US
+      - PLANTUML_URL="http://plantuml-server:8080/"
+      - EXPORT_URL="http://image-export:8000/"
+      - DRAWIO_BASE_URL="http://drawio:8080/"
+    volumes:
+      - "./appdata/drawio/PostConfig.js:/usr/local/tomcat/webapps/draw/js/PostConfig.js"
+      - "./appdata/drawio/PreConfig.js:/usr/local/tomcat/webapps/draw/js/PreConfig.js"
+    networks:
+      - docker-network
+    depends_on:
+      - image-server
+      - plantuml-server
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://drawio:8080 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+
+  nginx:
+    image: linuxserver/nginx
+    container_name: nginx
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - nginx:/config
+    networks:
+      - docker-network
+    depends_on:
+      - mariadb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://nginx:80 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+
 networks:
-   traefik-network:
-     external: true
-   gitea-network:
-     external: true
+  docker-network:
+    external: true
+
+volumes:
+  gitea:
+    external: true
+  nginx:
+    external: true
+  mariadb:
+    external: true
+  code-server:
+    external: true
