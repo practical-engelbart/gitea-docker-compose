@@ -1,0 +1,40 @@
+version: "3"
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    cap_add:
+      - NET_ADMIN
+    extra_hosts:
+      - --add-host=host.docker.internal:172.17.0.1
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Los_Angeles
+      - DOCKER_CERT_PATH=${DOCKER_CERT_PATH}
+      - DOCKER_HOST=${DOCKER_HOST}
+      - DOCKER_TLS_VERIFY=${DOCKER_TLS_VERIFY}
+      - CF_API_KEY=${CF_API_KEY}
+      - CF_API_EMAIL=${CF_API_EMAIL}
+    volumes:
+      - traefik:/etc/traefik
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 80:80
+      - 443:443
+    networks:
+      - docker-network
+    restart: always
+    depends_on:
+      - mariadb
+    labels:
+      - "traefik.enable=true"
+
+networks:
+  docker-network:
+    external: true
+
+volumes:
+  traefik:
+    external: true
