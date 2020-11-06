@@ -14,6 +14,9 @@ docker network create \
 --driver bridge \
 docker-network
 
+mkdir -p /opt/project/appdata/{mariadb,nginx,code-server,gitea,traefik,drawio}
+chown -R $USER:$USER /opt/project
+
 docker volume create \
 --driver local \
 --opt type=none \
