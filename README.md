@@ -2,9 +2,13 @@
 
 ### Project Setup
 
-Setup a user define docker bridge network and volumes:
+
+
+Git Clone this repo and setup a user define docker bridge network and volumes:
 
 ```
+git clone https://github.com/practical-engelbart/gitea-docker-compose.git 
+
 docker network create \
 --subnet 172.20.20.0/24 \
 --gateway 172.20.20.1 \
