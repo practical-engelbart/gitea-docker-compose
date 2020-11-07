@@ -6,6 +6,7 @@ global:
 serversTransport:
   rootCAs:
     - /etc/traefik/ssl/cloudflare.crt
+    - /etc/traefik/ssl/rootca.crt
   
 api:
   dashboard: true
