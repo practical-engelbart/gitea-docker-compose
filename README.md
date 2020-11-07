@@ -16,8 +16,11 @@ docker network create \
 --driver bridge \
 docker-network
 
-mkdir -p /opt/project/appdata/{mariadb,nginx,code-server,gitea,traefik,drawio,dillinger}
-chown -R $USER:$USER /opt/project
+sudo mv gitea-docker-compose/ /opt/project
+sudo rm /opt/project/.git
+
+sudo mkdir -p /opt/project/appdata/{mariadb,nginx,code-server,gitea,traefik,drawio,dillinger}
+sudo chown -R $USER:$USER /opt/project
 
 docker volume create \
 --driver local \
