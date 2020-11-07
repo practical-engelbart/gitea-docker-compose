@@ -17,7 +17,12 @@ services:
       - mariadb:/config
     networks:
       - docker-network
-    restart: unless-stopped
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://mariadb:3306 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
     labels:
       - traefik.enable=false
 
@@ -39,12 +44,12 @@ services:
       - docker-network
     depends_on:
       - mariadb
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://code-server:8443 || exit 1"]
       interval: 1m30s
       timeout: 10s
       retries: 3
-    restart: unless-stopped
     labels:
       - traefik.enable=true
 
@@ -79,12 +84,12 @@ services:
       - docker-network
     depends_on:
       - mariadb
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://gitea:3000 || exit 1"]
       interval: 1m30s
       timeout: 10s
       retries: 3
-    restart: unless-stopped
     labels:
       - traefik.enable=true
 
@@ -135,10 +140,9 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=America/Los_Angeles
-      - PUBLIC_DNS=drawio.technerdonline.com
       - ORGANISATION_UNIT=Drawio
       - ORGANISATION=Docker
-      - CITY="LA"
+      - CITY="Los Angeles"
       - STATE=California
       - COUNTRY_CODE=US
       - PLANTUML_URL="http://plantuml-server:8080/"
@@ -152,12 +156,36 @@ services:
     depends_on:
       - image-server
       - plantuml-server
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://drawio:8080 || exit 1"]
       interval: 1m30s
       timeout: 10s
       retries: 3
+    labels:
+      - traefik.enable=true
+      
+  dillinger:
+    image: ghcr.io/linuxserver/dillinger
+    container_name: dillinger
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - dillinger:/config
+    networks:
+      - docker-network
+    depends_on:
+      - mariadb
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://dillinger:8080 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
     labels:
       - traefik.enable=true
 
@@ -174,12 +202,12 @@ services:
       - docker-network
     depends_on:
       - mariadb
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://nginx:80 || exit 1"]
       interval: 1m30s
       timeout: 10s
       retries: 3
-    restart: unless-stopped
     labels:
       - traefik.enable=true
 
@@ -195,4 +223,6 @@ volumes:
   mariadb:
     external: true
   code-server:
+    external: true
+  dillinger:
     external: true
