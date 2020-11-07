@@ -2,8 +2,6 @@
 
 ### Project Setup
 
-
-
 Git Clone this repo and setup a user define docker bridge network and volumes:
 
 ```
@@ -18,42 +16,54 @@ docker network create \
 --driver bridge \
 docker-network
 
-mkdir -p /opt/project/appdata/{mariadb,nginx,code-server,gitea,traefik,drawio}
+mkdir -p /opt/project/appdata/{mariadb,nginx,code-server,gitea,traefik,drawio,dillinger}
 chown -R $USER:$USER /opt/project
 
 docker volume create \
 --driver local \
 --opt type=none \
---opt device=$HOME/project/appdata/mariadb \
+--opt device=/opt/project/appdata/mariadb \
 --opt o=bind \
 mariadb
 
 docker volume create \
 --driver local \
 --opt type=none \
---opt device=$HOME/project/appdata/nginx \
+--opt device=/opt/project/appdata/nginx \
 --opt o=bind \
 nginx
 
 docker volume create \
 --driver local \
 --opt type=none \
---opt device=$HOME/project/appdata/code-server \
+--opt device=/opt/project/appdata/code-server \
 --opt o=bind \
 code-server
 
 docker volume create \
 --driver local \
 --opt type=none \
---opt device=$HOME/project/appdata/gitea \
+--opt device=/opt/project/appdata/gitea \
 --opt o=bind \
 gitea
 
 docker volume create \
 --driver local \
 --opt type=none \
---opt device=$HOME/project/appdata/traefik \
+--opt device=/opt/project/appdata/traefik \
 --opt o=bind \
 traefik
+
+docker volume create \
+--driver local \
+--opt type=none \
+--opt device=/opt/project/appdata/dillinger \
+--opt o=bind \
+dillinger
+
+cd /opt/project
+
+docker-compose pull
+docker-compose up -d
 ```
 
