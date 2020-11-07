@@ -5,8 +5,6 @@ services:
     container_name: traefik
     cap_add:
       - NET_ADMIN
-    extra_hosts:
-      - --add-host=host.docker.internal:172.17.0.1
     env_file:
       - .env
     environment:
@@ -25,6 +23,7 @@ services:
       - 443:443
     networks:
       - docker-network
+      - traefik-network
     restart: always
     depends_on:
       - mariadb
@@ -33,6 +32,8 @@ services:
 
 networks:
   docker-network:
+    external: true
+  traefik-network:
     external: true
 
 volumes:
