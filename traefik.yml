@@ -58,7 +58,7 @@ certificatesResolvers:
         provider: cloudflare
         delayBeforeCheck: 10
         resolvers:
-          - '1.0.0.1:53'
+          - '1.1.1.1:53'
           - '1.0.0.1:53'
 
 providers:
@@ -110,6 +110,11 @@ http:
       loadBalancer:
         servers:
           - url: http://code-server:8443
+          
+    dillinger:
+      loadBalancer:
+        servers:
+          - url: http://dillinger:8080
 
     nginx:
       loadBalancer:
@@ -130,8 +135,8 @@ http:
       entryPoints:
         - websecure
       middlewares:
-        - basic-auth
         - csp-header
+        - basic-auth
       service: api@internal
     #GITEA
     gitea-redirect:
@@ -147,6 +152,20 @@ http:
       middlewares:
         - gitea-header
       service: gitea
+    #DILLINGER-REDIRECT
+    dillinger-redirect:
+      rule: "Host(`dillinger.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: dillinger
+    #DILLINGER-SECURE
+    dillinger-router:
+      rule: "Host(`dillinger.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - csp-header
+      service: dillinger
     #DRAWIO  
     drawio-redirect:
       rule: "Host(`drawio.technerdonline.com`)"
@@ -159,8 +178,8 @@ http:
       entryPoints:
         - websecure
       middlewares:
-        - basic-auth
         - gitea-header
+        - basic-auth
       service: drawio
     #CODE-SERVER
     code-server-redirect:
@@ -174,8 +193,8 @@ http:
       entryPoints:
         - websecure
       middlewares:
-        - basic-auth
         - gitea-header
+        - basic-auth
       service: code-server
     #NGINX
     nginx-redirect:
