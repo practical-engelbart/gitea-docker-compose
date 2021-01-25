@@ -1,0 +1,176 @@
+http:
+  #SERVICES
+  services:
+    gitea:
+      loadBalancer:
+        servers:
+          - url: http://gitea:3000
+    
+    drawio:
+      loadBalancer:
+        servers:
+          - url: http://drawio:8080
+
+    code-server:
+      loadBalancer:
+        servers:
+          - url: http://code-server:8443
+          
+    dillinger:
+      loadBalancer:
+        servers:
+          - url: http://dillinger:8080
+
+    nginx:
+      loadBalancer:
+        servers:
+          - url: http://nginx:80
+
+  #ROUTERS
+  routers:
+    #TRAEFIK
+    api-redirect:
+      rule: "Host(`traefik.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: api@internal
+    #TRAEFIK-SECURE
+    api-router:
+      rule: "Host(`traefik.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - csp-header
+        - basic-auth
+      service: api@internal
+    #GITEA
+    gitea-redirect:
+      rule: "Host(`git.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: gitea
+    #GITEA-SECURE  
+    gitea-router:
+      rule: "Host(`git.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - gitea-header
+      service: gitea
+    #DILLINGER-REDIRECT
+    dillinger-redirect:
+      rule: "Host(`dillinger.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: dillinger
+    #DILLINGER-SECURE
+    dillinger-router:
+      rule: "Host(`dillinger.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - csp-header
+      service: dillinger
+    #DRAWIO  
+    drawio-redirect:
+      rule: "Host(`drawio.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: drawio
+    #DRAWIO-SECURE
+    drawio-router:
+      rule: "Host(`drawio.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - gitea-header
+        - basic-auth
+      service: drawio
+    #CODE-SERVER
+    code-server-redirect:
+      rule: "Host(`code-server.technerdonline.com`)"
+      entryPoints:
+        - web
+      service: code-server
+    #CODE-SERVER-SECURE
+    code-server-router:
+      rule: "Host(`code-server.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - gitea-header
+        - basic-auth
+      service: code-server
+    #NGINX
+    nginx-redirect:
+      rule: "Host(`technerdonline.com`,`www.technerdonline.com`) || Host(`technerdonline.net`,`www.technerdonline.net`)"
+      entryPoints:
+        - web
+      middlewares:
+        - www-redirectregex
+        - net-redirectregex
+      service: nginx
+    #NGINX-SECURE
+    nginx-router:
+      rule: "Host(`technerdonline.com`, `www.technerdonline.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - csp-header
+      service: nginx
+  
+  #MIDDLEWARES
+  middlewares:
+    basic-auth:
+      basicAuth:
+        users:
+          - "$USER:$PASSWORD"
+        usersFile: "/etc/traefik/.htpasswd"
+        headerField: "X-WebAuth-User"
+        removeHeader: true
+
+    secure-header:
+      headers:
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        sslRedirect: true
+        forceSTSHeader: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        referrerPolicy: "no-referrer"
+
+    csp-header:
+      headers:
+        contentSecurityPolicy: "default-src 'self'; base-uri 'none'; object-src 'none'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self'; media-src 'self'; frame-ancestors 'self'; worker-src 'self' blob:" 
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'none'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"
+
+    gitea-header:
+      headers:
+        contentSecurityPolicy: "default-src 'self'; base-uri 'none'; object-src 'none'; manifest-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://*.technerdonline.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://*.technerdonline.com; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self'; media-src 'self'; frame-ancestors 'self'; worker-src 'self' blob:"
+        featurePolicy: "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'none'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'self' https://twofactorauth.org https://haveibeenpwned.org; usb *; vr 'none'"
+        
+    cf-passtlsclientcert:
+      passTLSClientCert:
+        pem: true
+    
+    http-redirectscheme:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    www-redirectregex:
+      redirectRegex:
+        regex: "^www.technerdonline.net"
+        replacement: "www.technerdonline.com"
+        permanent: true
+
+    net-redirectregex:
+      redirectRegex:
+        regex: "^technerdonline.net"
+        replacement: "technerdonline.com"
+        permanent: true
